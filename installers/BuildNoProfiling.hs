@@ -70,7 +70,7 @@ configs =
           , "elm-reactor"  =: "profiling"
           , "elm-repl"     =: "profiling"
           ]
-      ,
+    ,
       Config "optimized" [7,10] $
           [ "elm-compiler" =: "optimized"
           , "elm-package"  =: "0.16"
@@ -78,7 +78,7 @@ configs =
           , "elm-reactor"  =: "0.16"
           , "elm-repl"     =: "0.16"
           ]
-      ,
+    ,
       Config "master" [7,10] $
         [ "elm-compiler" =: "master"
         , "elm-package"  =: "master"
@@ -215,15 +215,11 @@ makeRepos artifactDirectory version repos =
       putStrLn "STEP: Installing dependencies only"
       -- install all of the packages together in order to resolve transitive dependencies robustly
       -- (install the dependencies a bit more quietly than the elm packages)
-      cabal ([ "--require-sandbox", "install", "-j", "--only-dependencies", "--enable-library-profiling", "--ghc-options=\"-w\"" ]
+      cabal ([ "--require-sandbox", "install", "-j", "--only-dependencies", "--ghc-options=\"-w\"" ]
              ++ (if version <= "0.15.1" then [ "--constraint=fsnotify<0.2" ] else [])
              ++ map fst repos)
-
       putStrLn "STEP: Generating .cabal file"
       cabal [ "init", "-n" ]
-      putStrLn "STEP: Configuring repositories"
-      cabal ["configure", "--enable-library-profiling", "--enable-executable-profiling", "--enable-tests", "--enable-benchmarks"]
-
       putStrLn "STEP: Installing everything except elm-reactor"
       cabal ([ "--require-sandbox", "install", "-j" ]
              ++ (if version <= "0.15.1" then [ "--ghc-options=\"-XFlexibleContexts\"" ] else [])
@@ -235,6 +231,7 @@ makeRepos artifactDirectory version repos =
       putStrLn "STEP: Done"
 
       return ()
+
 
 makeRepo :: FilePath -> String -> String -> IO ()
 makeRepo root projectName version =

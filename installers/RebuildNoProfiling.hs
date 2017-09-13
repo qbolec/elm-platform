@@ -38,7 +38,7 @@ import qualified Data.List as List
 import qualified Data.Map as Map
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory)
 import System.Environment (getArgs)
-import System.Exit (ExitCode, exitFailure)
+import System.Exit (ExitCode(ExitSuccess), exitFailure)
 import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr, stdout)
 import System.Process (rawSystem, readProcess)
@@ -70,7 +70,7 @@ configs =
           , "elm-reactor"  =: "profiling"
           , "elm-repl"     =: "profiling"
           ]
-      ,
+    ,
       Config "optimized" [7,10] $
           [ "elm-compiler" =: "optimized"
           , "elm-package"  =: "0.16"
@@ -78,7 +78,7 @@ configs =
           , "elm-reactor"  =: "0.16"
           , "elm-repl"     =: "0.16"
           ]
-      ,
+    ,
       Config "master" [7,10] $
         [ "elm-compiler" =: "master"
         , "elm-package"  =: "master"
@@ -197,11 +197,8 @@ failure msg =
 
 makeRepos :: FilePath -> String -> [(String, String)] -> IO ()
 makeRepos artifactDirectory version repos =
-  do  createDirectoryIfMissing True artifactDirectory
-      setCurrentDirectory artifactDirectory
-      writeFile "cabal.config" "split-objs: True"
+  do  setCurrentDirectory artifactDirectory
       root <- getCurrentDirectory
-      mapM_ (uncurry (makeRepo root)) repos
 
       putStrLn "STEP: Updating"
       cabal [ "update" ]
@@ -215,15 +212,11 @@ makeRepos artifactDirectory version repos =
       putStrLn "STEP: Installing dependencies only"
       -- install all of the packages together in order to resolve transitive dependencies robustly
       -- (install the dependencies a bit more quietly than the elm packages)
-      cabal ([ "--require-sandbox", "install", "-j", "--only-dependencies", "--enable-library-profiling", "--ghc-options=\"-w\"" ]
+      cabal ([ "--require-sandbox", "install", "-j", "--only-dependencies", "--ghc-options=\"-w\"" ]
              ++ (if version <= "0.15.1" then [ "--constraint=fsnotify<0.2" ] else [])
              ++ map fst repos)
-
       putStrLn "STEP: Generating .cabal file"
       cabal [ "init", "-n" ]
-      putStrLn "STEP: Configuring repositories"
-      cabal ["configure", "--enable-library-profiling", "--enable-executable-profiling", "--enable-tests", "--enable-benchmarks"]
-
       putStrLn "STEP: Installing everything except elm-reactor"
       cabal ([ "--require-sandbox", "install", "-j" ]
              ++ (if version <= "0.15.1" then [ "--ghc-options=\"-XFlexibleContexts\"" ] else [])
@@ -231,22 +224,9 @@ makeRepos artifactDirectory version repos =
 
       putStrLn "STEP: Installing elm-reactor"
       -- elm-reactor needs to be installed last because of a post-build dependency on elm-make
-      cabal [ "--require-sandbox", "install", "-j", "elm-reactor" ]
-      putStrLn "STEP: Done"
-
+      code <- cabal [ "--require-sandbox", "install", "-j", "elm-reactor" ]
+      if code == ExitSuccess then putStrLn "STEP: Done" else failure "Build Failed"
       return ()
-
-makeRepo :: FilePath -> String -> String -> IO ()
-makeRepo root projectName version =
-  do  -- get the right version of the repo
-      putStrLn $ "STEP: makeRepo " ++ projectName
-      git [ "clone", "https://github.com/qbolec/" ++ projectName ++ ".git" ]
-      setCurrentDirectory projectName
-      git [ "checkout", version, "--" ]
-
-      -- move back into the root
-      setCurrentDirectory root
-
 
 
 -- CHECK HASKELL VERSIONS
@@ -288,8 +268,3 @@ checkCabal =
 cabal :: [String] -> IO ExitCode
 cabal =
   rawSystem "cabal"
-
-
-git :: [String] -> IO ExitCode
-git =
-  rawSystem "git"
